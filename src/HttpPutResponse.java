@@ -11,6 +11,7 @@ public class HttpPutResponse {
         this.stream2Client = s2c;
     }
 
+
     public Socket getOpenedSocket() {
         return openedSocket;
     }

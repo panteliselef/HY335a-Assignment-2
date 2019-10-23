@@ -1,4 +1,5 @@
 import java.io.*;
+import java.lang.reflect.Array;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
@@ -100,7 +101,7 @@ public class ListenMonitor extends Thread {
 //                        GroupMember gm = getNewMember(inFromMember.readLine());
 //                        System.out.println(gm);
                         connectionSocket.close();
-                    } else if (requestMessageLine != null && requestMessageLine.startsWith("FILE")) {
+                    } else if (requestMessageLine != null && requestMessageLine.startsWith("FILE PUT")) {
                         String filenameLine = inFromMember.readLine();
                         String contentLine = inFromMember.readLine();
                         String timestampLine = inFromMember.readLine();
@@ -126,8 +127,6 @@ public class ListenMonitor extends Thread {
                             Socket toBeClosed = pendingClientReq.get(tm).getOpenedSocket();
                             DataOutputStream out = pendingClientReq.get(tm).getOutStream();
 
-                            out.writeBytes("Pending ... \n");
-
                             out.writeBytes("HTTP/1.1 201 Created\r\n");
 
                             if (filename.endsWith(".jpg"))
@@ -139,13 +138,95 @@ public class ListenMonitor extends Thread {
                             toBeClosed.close();
                             pendingClientReq.remove(vf.getTimestamp().toEpochMilli());
                         } else {
-                            MemoryMonitor mm = new MemoryMonitor("Listening" + mServer.getName(), mServer, vf);
+                            MemoryMonitor mm = new MemoryMonitor("Listening" + mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
                             mm.sendFileRequest(senderLine, mServer.getNextServer());
                         }
 
 
                         connectionSocket.close();
+                    } else if (requestMessageLine != null && requestMessageLine.startsWith("FILE GET")) {
+                        if (requestMessageLine.contains(mServer.getName())) {// means that a circle has been completed
+                            System.out.println("FILE GET Cirle Complete");
+                        }
+                        String filenameLine = inFromMember.readLine();
+                        String[] fileSplit = filenameLine.split("[:]");
+                        String filename = fileSplit[1];
+                        if (mServer.getMemory().containsKey(filename)) {
+                            System.out.println(mServer.getName() + " has the file");
+                            String buffer = "";
+                            // update other servers
+                            String senderLine = inFromMember.readLine();
+                            String contentLine = "CONTENT:" + mServer.getMemory().get(filename).getContent() + "\n";
+                            String timestampLine = "TIMESTAMP:" + mServer.getMemory().get(filename).getTimestamp().toEpochMilli() + "\n";
+                            buffer = buffer.concat(contentLine);
+                            buffer = buffer.concat(timestampLine);
+                            buffer = buffer.concat(senderLine);
+
+                            if(senderLine.contains(mServer.getName())){
+                                System.out.println("FILE GET Cirlce Complete");
+                            }else{
+                                MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(filename, ""), buffer);
+                                mm.start();
+                            }
+
+
+
+                        } else {
+                            System.out.println(mServer.getName() + " does not have the file");
+
+                            String line = inFromMember.readLine();
+                            String buffer = "";
+                            VirtualFile vf = null;
+                            if (line.contains("SENDER")) { //means that no valuable info about this file exists and  this is the end of this message
+                                System.out.println(mServer.getName() + " no file to save");
+
+                                if (line.contains(mServer.getName())) { // circle has been completed
+                                    System.out.println("FILE GET Cirlce Complete");
+                                    //close connection
+                                } else {// forward message
+                                    MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(filename, ""), line);
+                                    mm.start();
+                                }
+
+                            } else { // there is valuable info about the file and server should save it
+                                //then line should contain CONTENT
+                                System.out.println(mServer.getName() + " saving the file");
+                                buffer = buffer.concat(line);
+                                System.out.println("content -> " + line);
+                                String[] contentSplit = line.split("[:]");
+                                line = inFromMember.readLine(); // TIMESTAMP
+                                System.out.println("timestamp -> " + line);
+                                buffer = buffer.concat(line);
+                                String[] timestampSplit = line.split("[:]");
+
+                                String senderLine = inFromMember.readLine(); // SENDER
+                                buffer = buffer.concat(senderLine);
+
+                                String content = contentSplit[1];
+                                String timestamp = timestampSplit[1];
+                                System.out.println("t:" + timestamp);
+
+                                long tm = Long.parseLong(timestamp);
+                                Instant i = Instant.ofEpochMilli(tm);
+                                vf = new VirtualFile(filename, content, i);
+                                mServer.storeFile(vf);
+
+                                if(senderLine.contains(mServer.getName())){
+                                    System.out.println("FILE GET Circle Complete");
+                                }else{
+                                    MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, vf, buffer);
+                                    mm.start();
+                                }
+                            }
+
+                            // just forward the message to the group
+
+                        }
+                        System.out.println("----");
+                        System.out.println(filenameLine);
+                        connectionSocket.close();
                     }
+
                 } else if (requestMessageLine != null && (requestMessageLine.startsWith("GET") || requestMessageLine.startsWith("PUT"))) {
 
                     BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
@@ -159,42 +240,62 @@ public class ListenMonitor extends Thread {
 
                         fileName = tokenizedLine.nextToken();
 
-                        System.out.println(firstToken + " " + fileName);
+//                        System.out.println(firstToken + " " + fileName);
                         if (fileName.startsWith("/")) {
                             fileName = fileName.substring(1);
 
                         }
 
                         int numOfBytes = 0;
-                        try {
-                            File file = new File(fileName);
-                            numOfBytes = (int) file.length();
 
-                            FileInputStream inFile = new FileInputStream(fileName);
-                            byte[] fileInBytes = new byte[numOfBytes];
-                            inFile.read(fileInBytes);
-                            inFile.close();
-
+                        if (mServer.getMemory().containsKey(fileName)) {
+                            VirtualFile requestedFile = mServer.getMemory().get(fileName);
+                            System.out.println("File Exists");
                             outToClient.writeBytes("HTTP/1.1 200 Document Follows\r\n");
-
                             if (fileName.endsWith(".jpg"))
                                 outToClient.writeBytes("Content-Type: image/jpeg\r\n");
                             if (fileName.endsWith(".gif"))
                                 outToClient.writeBytes("Content-Type: image/gif\r\n");
-
-                            outToClient.writeBytes("Content-Length: " + numOfBytes + "\r\n");
+                            outToClient.writeBytes("Content-Length: " + requestedFile.getContent().length() + "\r\n");
                             outToClient.writeBytes("\r\n");
 
-                            outToClient.write(fileInBytes, 0, numOfBytes);
-                        } catch (FileNotFoundException e) {
-                            System.out.println("Unable to locate: /" + fileName);
 
+                            outToClient.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
+                        } else {
+
+                            System.out.println("File NOT Exists");
+
+                            // not logical right cauz file doesn't actually exists
+                            MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(fileName, ""));
+                            mm.start();
                         }
-
-//                        connectionSocket.close();
+//                        try {
+//                            File file = new File(fileName);
+//                            numOfBytes = (int) file.length();
+//
+//                            FileInputStream inFile = new FileInputStream(fileName);
+//                            byte[] fileInBytes = new byte[numOfBytes];
+//                            inFile.read(fileInBytes);
+//                            inFile.close();
+//
+//                            outToClient.writeBytes("HTTP/1.1 200 Document Follows\r\n");
+//
+//                            if (fileName.endsWith(".jpg"))
+//                                outToClient.writeBytes("Content-Type: image/jpeg\r\n");
+//                            if (fileName.endsWith(".gif"))
+//                                outToClient.writeBytes("Content-Type: image/gif\r\n");
+//
+//                            outToClient.writeBytes("Content-Length: " + numOfBytes + "\r\n");
+//                            outToClient.writeBytes("\r\n");
+//
+//                            outToClient.write(fileInBytes, 0, numOfBytes);
+//                        } catch (FileNotFoundException e) {
+//                            System.out.println("Unable to locate: /" + fileName);
+//                        }
+                        connectionSocket.close();
                     } else if (firstToken.equals("PUT")) {
                         String fileName = "";
-                        HttpPutResponse res = new HttpPutResponse(connectionSocket,outToClient);
+                        HttpPutResponse res = new HttpPutResponse(connectionSocket, outToClient);
                         fileName = tokenizedLine.nextToken();
 
                         System.out.println(firstToken + " " + fileName);
@@ -214,14 +315,13 @@ public class ListenMonitor extends Thread {
                         inFromClient.read(content); // read bytes
                         VirtualFile vf = new VirtualFile(fileName, String.copyValueOf(content));
                         pendingClientReq.put(vf.getTimestamp().toEpochMilli(), res);
-                        MemoryMonitor mm = new MemoryMonitor(mServer.getName(), mServer, vf);
+                        MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
                         mm.start();
                         mServer.getMemory().put(fileName, vf);
                         mServer.showMemomry();
 
 
                         if (mServer.getGroupMembers().size() == 1) {
-                            System.out.println("NICE");
                             outToClient.writeBytes("HTTP/1.1 201 Created\r\n");
 
                             if (fileName.endsWith(".jpg"))
@@ -249,7 +349,7 @@ public class ListenMonitor extends Thread {
             listenSocket.close();
 
         } catch (SocketException e) {
-            System.out.println("Probably a peer or client has disconnected");
+            System.out.println("Probably a peer or client has disconnected or port is already being used ");
 //            run();
 //            e.printStackTrace();
         } catch (IOException e) {
