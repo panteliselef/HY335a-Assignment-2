@@ -13,14 +13,43 @@ public class ListenMonitor extends Thread {
     private String threadName;
     private int port;
     private WebServer mServer;
-    private HashMap<Long, HttpPutResponse> pendingClientReq = new HashMap<>();
-    private HashMap<String,ArrayList<HttpPutResponse>> pendingClientGetReq = new HashMap<>();
+    private HashMap<Long, ClientConnectionInfo> pendingClientPutReq = new HashMap<>();
+    private HashMap<String,ArrayList<ClientConnectionInfo>> pendingClientGetReq = new HashMap<>();
 
     ListenMonitor(String threadName, int port, WebServer mServer) {
         this.threadName = "[Listen Monitor]" + threadName;
         this.port = port;
         this.mServer = mServer;
         System.out.println("Listening:  " + threadName);
+    }
+
+    private void answerToClient(String filename) throws IOException{
+        if(pendingClientGetReq.containsKey(filename)){
+            ArrayList<ClientConnectionInfo> hprs = pendingClientGetReq.get(filename);
+
+            for (ClientConnectionInfo res:hprs
+            ) {
+                Socket toBeClosed = res.getOpenedSocket();
+                DataOutputStream out = res.getOutStream();
+                if(mServer.getMemory().containsKey(filename)){
+
+                    VirtualFile requestedFile = mServer.getMemory().get(filename);
+
+                    out.writeBytes("HTTP/1.1 200 Document Follows\r\n");
+                    if (filename.endsWith(".jpg"))
+                        out.writeBytes("Content-Type: image/jpeg\r\n");
+                    if (filename.endsWith(".gif"))
+                        out.writeBytes("Content-Type: image/gif\r\n");
+                    out.writeBytes("Content-Length: " + requestedFile.getContent().length() + "\r\n");
+                    out.writeBytes("\r\n");
+
+
+                    out.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
+                }
+                toBeClosed.close();
+            }
+            pendingClientGetReq.remove(filename);
+        }
     }
 
     private void sendMemberList(DataOutputStream out) throws IOException {
@@ -99,8 +128,6 @@ public class ListenMonitor extends Thread {
                         } else {
                             StatusMonitor.sendReq(memberLists, mServer);
                         }
-//                        GroupMember gm = getNewMember(inFromMember.readLine());
-//                        System.out.println(gm);
                         connectionSocket.close();
                     } else if (requestMessageLine != null && requestMessageLine.startsWith("FILE PUT")) {
                         String filenameLine = inFromMember.readLine();
@@ -125,8 +152,8 @@ public class ListenMonitor extends Thread {
                         if (senderLine.contains(mServer.getName())) {
                             System.out.println(filename + " has been stored to group!!");
                             System.out.println("Answering to client");
-                            Socket toBeClosed = pendingClientReq.get(tm).getOpenedSocket();
-                            DataOutputStream out = pendingClientReq.get(tm).getOutStream();
+                            Socket toBeClosed = pendingClientPutReq.get(tm).getOpenedSocket();
+                            DataOutputStream out = pendingClientPutReq.get(tm).getOutStream();
 
                             out.writeBytes("HTTP/1.1 201 Created\r\n");
 
@@ -137,7 +164,7 @@ public class ListenMonitor extends Thread {
 
                             out.writeBytes("Content-Location: /" + filename + "\r\n");
                             toBeClosed.close();
-                            pendingClientReq.remove(vf.getTimestamp().toEpochMilli());
+                            pendingClientPutReq.remove(vf.getTimestamp().toEpochMilli());
                         } else {
                             MemoryMonitor mm = new MemoryMonitor("Listening" + mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
                             mm.sendFileRequest(senderLine, mServer.getNextServer());
@@ -168,32 +195,7 @@ public class ListenMonitor extends Thread {
                                 System.out.println("FILE GET Cirlce Complete");
                                 System.out.println("Answering to client");
 
-                                if(pendingClientGetReq.containsKey(filename)){
-                                    ArrayList<HttpPutResponse> hprs = pendingClientGetReq.get(filename);
-
-                                    for (HttpPutResponse res:hprs
-                                         ) {
-                                        Socket toBeClosed = res.getOpenedSocket();
-                                        DataOutputStream out = res.getOutStream();
-                                        if(mServer.getMemory().containsKey(filename)){
-
-                                            VirtualFile requestedFile = mServer.getMemory().get(filename);
-
-                                            out.writeBytes("HTTP/1.1 200 Document Follows\r\n");
-                                            if (filename.endsWith(".jpg"))
-                                                out.writeBytes("Content-Type: image/jpeg\r\n");
-                                            if (filename.endsWith(".gif"))
-                                                out.writeBytes("Content-Type: image/gif\r\n");
-                                            out.writeBytes("Content-Length: " + requestedFile.getContent().length() + "\r\n");
-                                            out.writeBytes("\r\n");
-
-
-                                            out.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
-                                        }
-                                        toBeClosed.close();
-                                    }
-                                    pendingClientGetReq.remove(filename);
-                                }
+                                answerToClient(filename);
                             }else{
                                 MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(filename, ""), buffer);
                                 mm.start();
@@ -216,32 +218,7 @@ public class ListenMonitor extends Thread {
                                     //close connection
                                     System.out.println("Answering to client");
 
-                                    if(pendingClientGetReq.containsKey(filename)){
-                                        ArrayList<HttpPutResponse> hprs = pendingClientGetReq.get(filename);
-
-                                        for (HttpPutResponse res:hprs
-                                        ) {
-                                            Socket toBeClosed = res.getOpenedSocket();
-                                            DataOutputStream out = res.getOutStream();
-                                            if(mServer.getMemory().containsKey(filename)){
-
-                                                VirtualFile requestedFile = mServer.getMemory().get(filename);
-
-                                                out.writeBytes("HTTP/1.1 200 Document Follows\r\n");
-                                                if (filename.endsWith(".jpg"))
-                                                    out.writeBytes("Content-Type: image/jpeg\r\n");
-                                                if (filename.endsWith(".gif"))
-                                                    out.writeBytes("Content-Type: image/gif\r\n");
-                                                out.writeBytes("Content-Length: " + requestedFile.getContent().length() + "\r\n");
-                                                out.writeBytes("\r\n");
-
-
-                                                out.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
-                                            }
-                                            toBeClosed.close();
-                                        }
-                                        pendingClientGetReq.remove(filename);
-                                    }
+                                    answerToClient(filename);
                                 } else {// forward message
                                     MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(filename, ""), line);
                                     mm.start();
@@ -274,40 +251,13 @@ public class ListenMonitor extends Thread {
                                     System.out.println("FILE GET Circle Complete");
                                     System.out.println("Answering to client");
 
-                                    if(pendingClientGetReq.containsKey(filename)){
-                                        ArrayList<HttpPutResponse> hprs = pendingClientGetReq.get(filename);
-
-                                        for (HttpPutResponse res:hprs
-                                        ) {
-                                            Socket toBeClosed = res.getOpenedSocket();
-                                            DataOutputStream out = res.getOutStream();
-                                            if(mServer.getMemory().containsKey(filename)){
-
-                                                VirtualFile requestedFile = mServer.getMemory().get(filename);
-
-                                                out.writeBytes("HTTP/1.1 200 Document Follows\r\n");
-                                                if (filename.endsWith(".jpg"))
-                                                    out.writeBytes("Content-Type: image/jpeg\r\n");
-                                                if (filename.endsWith(".gif"))
-                                                    out.writeBytes("Content-Type: image/gif\r\n");
-                                                out.writeBytes("Content-Length: " + requestedFile.getContent().length() + "\r\n");
-                                                out.writeBytes("\r\n");
-
-
-                                                out.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
-                                            }
-                                            toBeClosed.close();
-                                        }
-                                        pendingClientGetReq.remove(filename);
-                                    }
+                                    answerToClient(filename);
                                 }else{
                                     System.out.println("Forwarding this msg: "+buffer+"\n");
                                     MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, vf, buffer);
                                     mm.start();
                                 }
                             }
-
-                            // just forward the message to the group
 
                         }
                         System.out.println("----");
@@ -325,14 +275,13 @@ public class ListenMonitor extends Thread {
 
                     if (firstToken.equals("GET")) {
                         String fileName = "";
-                        HttpPutResponse res = new HttpPutResponse(connectionSocket, outToClient);
+                        ClientConnectionInfo res = new ClientConnectionInfo(connectionSocket, outToClient);
 
                         fileName = tokenizedLine.nextToken();
 
 //                        System.out.println(firstToken + " " + fileName);
                         if (fileName.startsWith("/")) {
                             fileName = fileName.substring(1);
-
                         }
 
                         int numOfBytes = 0;
@@ -360,7 +309,7 @@ public class ListenMonitor extends Thread {
                                 pendingClientGetReq.get(fileName).add(res);
                                 // don't make another request
                             }else {
-                                ArrayList<HttpPutResponse> tmp = new ArrayList<>();
+                                ArrayList<ClientConnectionInfo> tmp = new ArrayList<>();
                                 tmp.add(res);
                                 pendingClientGetReq.put(fileName,tmp);
                                 // not logical right cauz file doesn't actually exists
@@ -372,7 +321,7 @@ public class ListenMonitor extends Thread {
 
                     } else if (firstToken.equals("PUT")) {
                         String fileName = "";
-                        HttpPutResponse res = new HttpPutResponse(connectionSocket, outToClient);
+                        ClientConnectionInfo res = new ClientConnectionInfo(connectionSocket, outToClient);
                         fileName = tokenizedLine.nextToken();
 
                         System.out.println(firstToken + " " + fileName);
@@ -388,10 +337,9 @@ public class ListenMonitor extends Thread {
                         int numOfBytes = Integer.parseInt(tok.nextToken());
                         char[] content = new char[numOfBytes];
 
-//                        byte[] contentInBytes = new byte[numOfBytes];
                         inFromClient.read(content); // read bytes
                         VirtualFile vf = new VirtualFile(fileName, String.copyValueOf(content));
-                        pendingClientReq.put(vf.getTimestamp().toEpochMilli(), res);
+                        pendingClientPutReq.put(vf.getTimestamp().toEpochMilli(), res);
                         MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
                         mm.start();
                         mServer.getMemory().put(fileName, vf);
@@ -407,12 +355,11 @@ public class ListenMonitor extends Thread {
                                 outToClient.writeBytes("Content-Type: image/gif\r\n");
 
                             outToClient.writeBytes("Content-Location: /" + fileName + "\r\n");
-                            pendingClientReq.remove(vf.getTimestamp().toEpochMilli());
+                            pendingClientPutReq.remove(vf.getTimestamp().toEpochMilli());
                             connectionSocket.close();
                         }
 
                     }
-//                    connectionSocket.close();
                 } else if (requestMessageLine != null && requestMessageLine.startsWith("EXIT")) {
                     System.out.println("Leaving");
                     connectionSocket.close();
@@ -421,14 +368,11 @@ public class ListenMonitor extends Thread {
                     System.out.println("[404] Request not Found :(");
                     connectionSocket.close();
                 }
-//                connectionSocket.close();
             }
             listenSocket.close();
 
         } catch (SocketException e) {
             System.out.println("Probably a peer or client has disconnected or port is already being used ");
-//            run();
-//            e.printStackTrace();
         } catch (IOException e) {
             System.out.println("Cannot listen on port: " + port);
             e.printStackTrace();

@@ -1,12 +1,12 @@
 import java.io.DataOutputStream;
 import java.net.Socket;
 
-public class HttpPutResponse {
+public class ClientConnectionInfo {
 
     private Socket openedSocket;
     private DataOutputStream stream2Client;
 
-    HttpPutResponse(Socket os, DataOutputStream s2c){
+    ClientConnectionInfo(Socket os, DataOutputStream s2c){
         this.openedSocket = os;
         this.stream2Client = s2c;
     }
