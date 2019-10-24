@@ -22,6 +22,11 @@ public class GroupMember {
         return ipAddress;
     }
 
+    public boolean equals(GroupMember obj) {
+        if (this.name == obj.name && this.port == obj.port && this.ipAddress == obj.ipAddress) return true;
+        return false;
+    }
+
     @Override
     public String toString() {
         return "[GroupMember]"+name+" with "+ipAddress+" on "+port;

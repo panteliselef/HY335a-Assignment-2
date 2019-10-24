@@ -45,6 +45,8 @@ public class ListenMonitor extends Thread {
 
 
                     out.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
+                }else {
+                    out.writeBytes("HTTP/1.1 404 File Not Found\r\n");
                 }
                 toBeClosed.close();
             }
@@ -81,6 +83,104 @@ public class ListenMonitor extends Thread {
             gms.add(gm);
         }
         return gms;
+    }
+
+    private void handleClientPUT(Socket connectionSocket,StringTokenizer tokenizedLine) throws IOException{
+        BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
+        DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
+
+        String fileName = "";
+        String requestMessageLine;
+        ClientConnectionInfo res = new ClientConnectionInfo(connectionSocket, outToClient);
+        fileName = tokenizedLine.nextToken();
+
+        if (fileName.startsWith("/")) {
+            fileName = fileName.substring(1);
+        }
+
+        requestMessageLine = inFromClient.readLine(); // Content-Type
+        requestMessageLine = inFromClient.readLine(); // Content-length
+        StringTokenizer tok = new StringTokenizer(requestMessageLine);
+        tok.nextToken();
+        int numOfBytes = Integer.parseInt(tok.nextToken());
+        char[] content = new char[numOfBytes];
+
+        inFromClient.read(content); // read bytes
+        VirtualFile vf = new VirtualFile(fileName, String.copyValueOf(content));
+        pendingClientPutReq.put(vf.getTimestamp().toEpochMilli(), res);
+        MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
+        mm.start();
+        mServer.getMemory().put(fileName, vf);
+        mServer.showMemomry();
+
+
+        if (mServer.getGroupMembers().size() == 1) {
+            outToClient.writeBytes("HTTP/1.1 201 Created\r\n");
+
+            if (fileName.endsWith(".jpg"))
+                outToClient.writeBytes("Content-Type: image/jpeg\r\n");
+            if (fileName.endsWith(".gif"))
+                outToClient.writeBytes("Content-Type: image/gif\r\n");
+
+            outToClient.writeBytes("Content-Location: /" + fileName + "\r\n");
+            pendingClientPutReq.remove(vf.getTimestamp().toEpochMilli());
+            connectionSocket.close();
+        }
+    }
+
+    private void handleClientGET(Socket connectionSocket,StringTokenizer tokenizedLine) throws IOException{
+
+        BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
+        DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
+
+        String fileName = "";
+        ClientConnectionInfo res = new ClientConnectionInfo(connectionSocket, outToClient);
+
+        fileName = tokenizedLine.nextToken();
+
+        if (fileName.startsWith("/")) {
+            fileName = fileName.substring(1);
+        }
+
+
+        if (mServer.getMemory().containsKey(fileName)) {
+            VirtualFile requestedFile = mServer.getMemory().get(fileName);
+            System.out.println("File Exists");
+            outToClient.writeBytes("HTTP/1.1 200 Document Follows\r\n");
+            if (fileName.endsWith(".jpg"))
+                outToClient.writeBytes("Content-Type: image/jpeg\r\n");
+            if (fileName.endsWith(".gif"))
+                outToClient.writeBytes("Content-Type: image/gif\r\n");
+            outToClient.writeBytes("Content-Length: " + requestedFile.getContent().length() + "\r\n");
+            outToClient.writeBytes("\r\n");
+
+
+            outToClient.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
+            connectionSocket.close();
+        } else {
+
+            System.out.println("File NOT Exists");
+
+            if(pendingClientGetReq.containsKey(fileName)){ // another client has already requested this file
+                // so just make this client to wait for the answer
+                pendingClientGetReq.get(fileName).add(res);
+                // don't make another request
+            }else {
+                if (mServer.getNextServer().equals(mServer.getThisServer())) {//Means that server has no siblings
+                    outToClient.writeBytes("HTTP/1.1 404 File Not Found\r\n");
+                    connectionSocket.close();
+                }else {
+                    ArrayList<ClientConnectionInfo> tmp = new ArrayList<>();
+                    tmp.add(res);
+                    pendingClientGetReq.put(fileName,tmp);
+                    // not logical right cauz file doesn't actually exists
+                    MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(fileName, ""));
+                    mm.start();
+                }
+            }
+
+        }
+
     }
 
     @Override
@@ -126,7 +226,7 @@ public class ListenMonitor extends Thread {
                             mServer.setGroupMembers(gms);
                             mServer.showGroupMembers();
                         } else {
-                            StatusMonitor.sendReq(memberLists, mServer);
+                            StatusMonitor.sendReq(memberLists, mServer,mServer.getNextServer());
                         }
                         connectionSocket.close();
                     } else if (requestMessageLine != null && requestMessageLine.startsWith("FILE PUT")) {
@@ -266,99 +366,16 @@ public class ListenMonitor extends Thread {
                     }
 
                 } else if (requestMessageLine != null && (requestMessageLine.startsWith("GET") || requestMessageLine.startsWith("PUT"))) {
-
-                    BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
-                    DataOutputStream outToClient = new DataOutputStream(connectionSocket.getOutputStream());
-
                     StringTokenizer tokenizedLine = new StringTokenizer(requestMessageLine);
                     String firstToken = tokenizedLine.nextToken();
 
                     if (firstToken.equals("GET")) {
-                        String fileName = "";
-                        ClientConnectionInfo res = new ClientConnectionInfo(connectionSocket, outToClient);
 
-                        fileName = tokenizedLine.nextToken();
-
-//                        System.out.println(firstToken + " " + fileName);
-                        if (fileName.startsWith("/")) {
-                            fileName = fileName.substring(1);
-                        }
-
-                        int numOfBytes = 0;
-
-                        if (mServer.getMemory().containsKey(fileName)) {
-                            VirtualFile requestedFile = mServer.getMemory().get(fileName);
-                            System.out.println("File Exists");
-                            outToClient.writeBytes("HTTP/1.1 200 Document Follows\r\n");
-                            if (fileName.endsWith(".jpg"))
-                                outToClient.writeBytes("Content-Type: image/jpeg\r\n");
-                            if (fileName.endsWith(".gif"))
-                                outToClient.writeBytes("Content-Type: image/gif\r\n");
-                            outToClient.writeBytes("Content-Length: " + requestedFile.getContent().length() + "\r\n");
-                            outToClient.writeBytes("\r\n");
-
-
-                            outToClient.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
-                            connectionSocket.close();
-                        } else {
-
-                            System.out.println("File NOT Exists");
-
-                            if(pendingClientGetReq.containsKey(fileName)){ // another client has already requested this file
-                                // so just make this client to wait for the answer
-                                pendingClientGetReq.get(fileName).add(res);
-                                // don't make another request
-                            }else {
-                                ArrayList<ClientConnectionInfo> tmp = new ArrayList<>();
-                                tmp.add(res);
-                                pendingClientGetReq.put(fileName,tmp);
-                                // not logical right cauz file doesn't actually exists
-                                MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(fileName, ""));
-                                mm.start();
-                            }
-
-                        }
+                        handleClientGET(connectionSocket,tokenizedLine);
 
                     } else if (firstToken.equals("PUT")) {
-                        String fileName = "";
-                        ClientConnectionInfo res = new ClientConnectionInfo(connectionSocket, outToClient);
-                        fileName = tokenizedLine.nextToken();
 
-                        System.out.println(firstToken + " " + fileName);
-
-                        if (fileName.startsWith("/")) {
-                            fileName = fileName.substring(1);
-                        }
-
-                        requestMessageLine = inFromClient.readLine(); // Content-Type
-                        requestMessageLine = inFromClient.readLine(); // Content-length
-                        StringTokenizer tok = new StringTokenizer(requestMessageLine);
-                        tok.nextToken();
-                        int numOfBytes = Integer.parseInt(tok.nextToken());
-                        char[] content = new char[numOfBytes];
-
-                        inFromClient.read(content); // read bytes
-                        VirtualFile vf = new VirtualFile(fileName, String.copyValueOf(content));
-                        pendingClientPutReq.put(vf.getTimestamp().toEpochMilli(), res);
-                        MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
-                        mm.start();
-                        mServer.getMemory().put(fileName, vf);
-                        mServer.showMemomry();
-
-
-                        if (mServer.getGroupMembers().size() == 1) {
-                            outToClient.writeBytes("HTTP/1.1 201 Created\r\n");
-
-                            if (fileName.endsWith(".jpg"))
-                                outToClient.writeBytes("Content-Type: image/jpeg\r\n");
-                            if (fileName.endsWith(".gif"))
-                                outToClient.writeBytes("Content-Type: image/gif\r\n");
-
-                            outToClient.writeBytes("Content-Location: /" + fileName + "\r\n");
-                            pendingClientPutReq.remove(vf.getTimestamp().toEpochMilli());
-                            connectionSocket.close();
-                        }
-
+                        handleClientPUT(connectionSocket,tokenizedLine);
                     }
                 } else if (requestMessageLine != null && requestMessageLine.startsWith("EXIT")) {
                     System.out.println("Leaving");

@@ -6,6 +6,7 @@ import java.net.ConnectException;
 import java.net.Socket;
 import java.net.SocketException;
 
+
 public class MemoryMonitor extends Thread {
     public enum ReqType {GET, PUT};
     private String threadName;
@@ -61,8 +62,7 @@ public class MemoryMonitor extends Thread {
     }
 
     public void sendFileRequest(String senderLine, GroupMember gm) throws IOException {
-        if (gm == mServer.getThisServer()) return;
-        if (gm == null) return;
+        if (gm.equals(mServer.getThisServer())) return;
         if (gm.getPort() == mServer.getPort() && gm.getIpAddress().equals(mServer.getIp())) return;
 
         //connect to server's right sibling
