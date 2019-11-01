@@ -83,19 +83,19 @@ public class WebServer {
         if(memory.containsKey(vf.getName())){
             //need to update the content
             memory.replace(vf.getName(),vf);
-            System.out.println(vf.getName()+" has been updated in "+name);
+            System.out.println(ConsoleColors.GREEN +vf.getName()+" has been updated in "+name+ConsoleColors.RESET);
         }else{
             memory.put(vf.getName(),vf);
-            System.out.println(vf.getName()+" has been saved in "+name);
+            System.out.println(ConsoleColors.GREEN+vf.getName()+" has been saved in "+name+ConsoleColors.RESET);
         }
 
     }
 
     public void showGroupMembers(){
-        System.out.println("Printing Members of "+name);
+        System.out.println("-- Printing Members of "+name);
         for (GroupMember gm:
              groupMembers) {
-            System.out.println(gm);
+            System.out.println(ConsoleColors.GREEN + "--- "+gm+ ConsoleColors.RESET);
         }
     }
     public void showMemomry(){

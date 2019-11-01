@@ -22,7 +22,7 @@ public class MemoryMonitor extends Thread {
         this.vf = vf;
         this.type = type;
 
-        System.out.println("Memory Thread: " + threadName);
+//        System.out.println("Memory Thread: " + threadName);
     }
 
     MemoryMonitor(String threadName, ReqType type, WebServer mServer, VirtualFile vf, String customMsg) {
@@ -33,7 +33,7 @@ public class MemoryMonitor extends Thread {
         this.type = type;
         this.customMsg = customMsg;
 
-        System.out.println("Memory Thread: " + threadName);
+//        System.out.println("Memory Thread: " + threadName);
     }
 
     private void writeFilePutMessage(DataOutputStream dops) throws IOException {
@@ -62,15 +62,14 @@ public class MemoryMonitor extends Thread {
     }
 
     public void sendFileRequest(String senderLine, GroupMember gm) throws IOException {
-        if (gm.equals(mServer.getThisServer())) return;
-        if (gm.getPort() == mServer.getPort() && gm.getIpAddress().equals(mServer.getIp())) return;
-
+//        if(gm.equals(mServer.getNextServer()))return;
         //connect to server's right sibling
         Socket serverSocket = null;
         try {
             serverSocket = new Socket(gm.getIpAddress(), gm.getPort()); // connect to another member
         } catch (ConnectException e) {
             System.out.println("[send File]Connect Exception");
+            System.out.println("[send File]Sending to"+mServer.getNextOf(gm));
             sendFileRequest(senderLine, mServer.getNextOf(gm));
             System.out.println("--After sendFileRequest()");
         } catch (SocketException e) {
@@ -96,7 +95,7 @@ public class MemoryMonitor extends Thread {
 
     @Override
     public void run() {
-        System.out.println("Running "+ threadName);
+//        System.out.println("Running "+ threadName);
         try {
             GroupMember gm = mServer.getNextServer();
             sendFileRequest("SENDER:" + mServer.getName(), gm);

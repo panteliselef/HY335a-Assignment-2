@@ -17,7 +17,6 @@ public class StatusMonitor extends Thread {
     StatusMonitor(String threadName,WebServer server){
         this.threadName = "[Status Monitor] "+threadName;
         this.mServer = server;
-        System.out.println("Status Thread: "+ threadName);
     }
 
     private void setInterval(int millisecs){
@@ -38,11 +37,10 @@ public class StatusMonitor extends Thread {
             serverSocket  = new Socket(gm.getIpAddress(),gm.getPort()); // connect to another member
         }
         catch (ConnectException e){
-            System.out.println("[send Status]Connect Exception");
+            System.out.println(ConsoleColors.RED+ "[send Status] Cannot connect to "+ gm.getName()+ ConsoleColors.RESET);
             GroupMember nextOfGm = mServer.getNextOf(gm);
             mServer.getGroupMembers().remove(gm);
             sendStatusRequest(msg,nextOfGm);
-            System.out.println("--After moveOn()");
         }
         catch (SocketException e){
             System.out.println("[send Status]Socket Exception");
@@ -68,11 +66,10 @@ public class StatusMonitor extends Thread {
             serverSocket  = new Socket(gm.getIpAddress(),gm.getPort()); // connect to another member
         }
         catch (ConnectException e){
-            System.out.println("[Static Req] Connect Exception");
+            System.out.println(ConsoleColors.RED+ "[Static Req] Cannot connect to "+ gm.getName()+ ConsoleColors.RESET);
             GroupMember nextOfGm = mServer.getNextOf(gm);
             mServer.getGroupMembers().remove(gm);
             sendReq(msg,mServer,nextOfGm);
-            System.out.println("--After moveOnNext()");
         }
         catch (SocketException e){
             System.out.println("[Static Req] Socket Exception");

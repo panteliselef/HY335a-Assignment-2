@@ -23,7 +23,7 @@ public class GroupMember {
     }
 
     public boolean equals(GroupMember obj) {
-        if (this.name == obj.name && this.port == obj.port && this.ipAddress == obj.ipAddress) return true;
+        if (this.name.equals(obj.name) && this.port == obj.port && this.ipAddress.equals(obj.ipAddress)) return true;
         return false;
     }
 

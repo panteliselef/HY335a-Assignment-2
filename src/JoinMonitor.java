@@ -45,7 +45,6 @@ public class JoinMonitor extends Thread {
             // response from the other member
             requestMessageLine = inFromServer.readLine();
             if(requestMessageLine != null){
-                System.out.println("Diff:"+ requestMessageLine);
                 if(Integer.parseInt(requestMessageLine) == 1){
                     //server doens't have right sibling
                     //fetch the member list from the other member
@@ -56,6 +55,7 @@ public class JoinMonitor extends Thread {
                     outToMember.writeBytes(mServer.getName()+","+mServer.getPort()+","+mServer.getIp()+",\n");
                     gms.add(new GroupMember(mServer.getName(),mServer.getPort(),mServer.getIp()));
                     mServer.setGroupMembers(gms);
+                    System.out.println(ConsoleColors.BLUE + "JOINED"+ ConsoleColors.RESET);
                     mServer.showGroupMembers();
                 }else{
                     //server HAS right sibling
@@ -75,10 +75,11 @@ public class JoinMonitor extends Thread {
                     gms.add(indexToAdd+1,new GroupMember(mServer.getName(),mServer.getPort(),mServer.getIp()));
                     outToMember.writeBytes(mServer.getName()+","+mServer.getPort()+","+mServer.getIp()+",\n");
                     mServer.setGroupMembers(gms);
+                    System.out.println(ConsoleColors.BLUE + "JOINED"+ ConsoleColors.RESET);
                     mServer.showGroupMembers();
                 }
             }
-            else System.out.println("Nothing to show ");
+            else System.out.println(ConsoleColors.RED+"Nothing to show "+ConsoleColors.RESET);
             serverSocket.close();
 
         } catch (IOException e) {

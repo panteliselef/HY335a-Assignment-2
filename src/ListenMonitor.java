@@ -17,10 +17,10 @@ public class ListenMonitor extends Thread {
     private HashMap<String,ArrayList<ClientConnectionInfo>> pendingClientGetReq = new HashMap<>();
 
     ListenMonitor(String threadName, int port, WebServer mServer) {
-        this.threadName = "[Listen Monitor]" + threadName;
+        this.threadName = "[Listen Monitor] " + threadName;
         this.port = port;
         this.mServer = mServer;
-        System.out.println("Listening:  " + threadName);
+//        System.out.println(ConsoleColors.GREEN +"Listening:  " + threadName + ConsoleColors.RESET);
     }
 
     private void answerToClient(String filename) throws IOException{
@@ -63,7 +63,6 @@ public class ListenMonitor extends Thread {
                 msg = msg.concat(mServer.getGroupMembers().get(i).getName() + "," + mServer.getGroupMembers().get(i).getPort() + "," + mServer.getGroupMembers().get(i).getIpAddress());
             }
         }
-        System.out.println(msg);
         out.writeBytes(msg + '\n');
     }
 
@@ -107,9 +106,7 @@ public class ListenMonitor extends Thread {
 
         inFromClient.read(content); // read bytes
         VirtualFile vf = new VirtualFile(fileName, String.copyValueOf(content));
-        pendingClientPutReq.put(vf.getTimestamp().toEpochMilli(), res);
-        MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
-        mm.start();
+
         mServer.getMemory().put(fileName, vf);
         mServer.showMemomry();
 
@@ -123,8 +120,12 @@ public class ListenMonitor extends Thread {
                 outToClient.writeBytes("Content-Type: image/gif\r\n");
 
             outToClient.writeBytes("Content-Location: /" + fileName + "\r\n");
-            pendingClientPutReq.remove(vf.getTimestamp().toEpochMilli());
+//            pendingClientPutReq.remove(vf.getTimestamp().toEpochMilli());
             connectionSocket.close();
+        }else{
+            pendingClientPutReq.put(vf.getTimestamp().toEpochMilli(), res);
+            MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
+            mm.start();
         }
     }
 
@@ -166,6 +167,7 @@ public class ListenMonitor extends Thread {
                 pendingClientGetReq.get(fileName).add(res);
                 // don't make another request
             }else {
+                mServer.showGroupMembers();
                 if (mServer.getNextServer().equals(mServer.getThisServer())) {//Means that server has no siblings
                     outToClient.writeBytes("HTTP/1.1 404 File Not Found\r\n");
                     connectionSocket.close();
@@ -188,7 +190,7 @@ public class ListenMonitor extends Thread {
         System.out.println("Running " + threadName);
         try {
             ServerSocket listenSocket = new ServerSocket(port);
-            System.out.println("Server ready on " + port);
+            System.out.println(ConsoleColors.GREEN+"Server ready on " + port+ConsoleColors.RESET);
             String requestMessageLine;
             while (true) {
 
@@ -196,10 +198,10 @@ public class ListenMonitor extends Thread {
                 BufferedReader inFromMember = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
                 DataOutputStream outToMember = new DataOutputStream(connectionSocket.getOutputStream());
                 requestMessageLine = inFromMember.readLine();
-                System.out.println(requestMessageLine);
+//                System.out.println(requestMessageLine);
                 if (requestMessageLine != null && requestMessageLine.startsWith("ELEF")) {
                     requestMessageLine = inFromMember.readLine();
-                    System.out.println(requestMessageLine);
+                    System.out.println(ConsoleColors.BLUE + requestMessageLine + ConsoleColors.RESET);
                     if (requestMessageLine != null && requestMessageLine.startsWith("JOIN")) {
                         int diff = mServer.getGroupMembers().size() - mServer.getIndexAsMember();
                         outToMember.writeBytes(String.valueOf(diff) + '\n');
@@ -221,7 +223,7 @@ public class ListenMonitor extends Thread {
                     } else if (requestMessageLine != null && requestMessageLine.startsWith("STATUS")) {
                         String memberLists = inFromMember.readLine();
                         if (memberLists.contains(mServer.getName())) {
-                            System.out.println("Cycle has been completed");
+                            System.out.println(ConsoleColors.GREEN+ "-- STATUS Response" + ConsoleColors.RESET);
                             ArrayList<GroupMember> gms = parseMembers(memberLists);
                             mServer.setGroupMembers(gms);
                             mServer.showGroupMembers();
@@ -235,7 +237,6 @@ public class ListenMonitor extends Thread {
                         String timestampLine = inFromMember.readLine();
                         String senderLine = inFromMember.readLine();
 
-                        System.out.println("----");
                         String[] fileSplit = filenameLine.split("[:]");
                         String[] contentSplit = contentLine.split("[:]");
                         String[] timestampSplit = timestampLine.split("[:]");
@@ -250,8 +251,8 @@ public class ListenMonitor extends Thread {
                         mServer.storeFile(vf);
 
                         if (senderLine.contains(mServer.getName())) {
-                            System.out.println(filename + " has been stored to group!!");
-                            System.out.println("Answering to client");
+                            System.out.println(ConsoleColors.GREEN+filename + " stored to group !!"+ConsoleColors.RESET);
+                            System.out.println(ConsoleColors.BLUE+"Answering to client"+ConsoleColors.RESET);
                             Socket toBeClosed = pendingClientPutReq.get(tm).getOpenedSocket();
                             DataOutputStream out = pendingClientPutReq.get(tm).getOutStream();
 
@@ -304,19 +305,16 @@ public class ListenMonitor extends Thread {
 
 
                         } else {
-                            System.out.println(mServer.getName() + " does not have the file");
-
+                            System.out.println(ConsoleColors.RED+filename +" not found in "+mServer.getName()+ConsoleColors.RESET);
                             String line = inFromMember.readLine();
                             String buffer = "";
                             VirtualFile vf = null;
                             if (line.contains("SENDER")) { //means that no valuable info about this file exists and  this is the end of this message
-                                System.out.print("Line contains "+line+"\n");
-                                System.out.println(mServer.getName() + " no file to save");
 
                                 if (line.contains(mServer.getName())) { // circle has been completed
-                                    System.out.println("FILE GET Cirlce Complete");
+                                    System.out.println(ConsoleColors.BLUE+"FILE GET Cirlce Complete"+ConsoleColors.RESET);
                                     //close connection
-                                    System.out.println("Answering to client");
+                                    System.out.println(ConsoleColors.BLUE+"Answering to client"+ConsoleColors.RESET);
 
                                     answerToClient(filename);
                                 } else {// forward message
@@ -360,8 +358,6 @@ public class ListenMonitor extends Thread {
                             }
 
                         }
-                        System.out.println("----");
-                        System.out.println(filenameLine);
                         connectionSocket.close();
                     }
 
