@@ -1,5 +1,8 @@
+/*
+ * Pantelis Eleftheriadis
+ * csd3942
+ */
 import java.io.*;
-import java.lang.reflect.Array;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
@@ -8,6 +11,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.StringTokenizer;
 
+
+/**
+ * This class implements the listening functionality of a WebServer.
+ * It extends the class Thread, because we don't want to "listen" in the main Thread and use another on instead
+ * It has a threadName, a port number, a reference to a Server, and it uses hashmaps to save/organize
+ * pending client requests
+ * @author csd3942
+ */
 
 public class ListenMonitor extends Thread {
     private String threadName;
@@ -20,10 +31,13 @@ public class ListenMonitor extends Thread {
         this.threadName = "[Listen Monitor] " + threadName;
         this.port = port;
         this.mServer = mServer;
-//        System.out.println(ConsoleColors.GREEN +"Listening:  " + threadName + ConsoleColors.RESET);
     }
 
-    private void answerToClient(String filename) throws IOException{
+    /**
+    * @post Client/Clients should get an answer from Server and the pending request should have been removed as it is no longer pending
+    * @param filename name of the file we want to send to Client/Clients
+    * */
+    private void answerGETToClient(String filename) throws IOException{
         if(pendingClientGetReq.containsKey(filename)){
             ArrayList<ClientConnectionInfo> hprs = pendingClientGetReq.get(filename);
 
@@ -54,35 +68,6 @@ public class ListenMonitor extends Thread {
         }
     }
 
-    private void sendMemberList(DataOutputStream out) throws IOException {
-        String msg = "";
-        for (int i = 0; i < mServer.getGroupMembers().size(); i++) {
-            if (i != mServer.getGroupMembers().size()) {
-                msg = msg.concat(mServer.getGroupMembers().get(i).getName() + "," + mServer.getGroupMembers().get(i).getPort() + "," + mServer.getGroupMembers().get(i).getIpAddress() + "$");
-            } else {
-                msg = msg.concat(mServer.getGroupMembers().get(i).getName() + "," + mServer.getGroupMembers().get(i).getPort() + "," + mServer.getGroupMembers().get(i).getIpAddress());
-            }
-        }
-        out.writeBytes(msg + '\n');
-    }
-
-
-    private GroupMember getNewMember(String lineFromServer) {
-        String[] info = lineFromServer.split("[,]");
-        GroupMember gm = new GroupMember(info[0], Integer.parseInt(info[1]), info[2]);
-        return gm;
-    }
-
-    private ArrayList<GroupMember> parseMembers(String lineFromServer) {
-        String[] items = lineFromServer.split("[$]");
-        ArrayList<GroupMember> gms = new ArrayList<>();
-        for (String item : items) {
-            String[] info = item.split("[,]");
-            GroupMember gm = new GroupMember(info[0], Integer.parseInt(info[1]), info[2]);
-            gms.add(gm);
-        }
-        return gms;
-    }
 
     private void handleClientPUT(Socket connectionSocket,StringTokenizer tokenizedLine) throws IOException{
         BufferedReader inFromClient = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
@@ -92,6 +77,7 @@ public class ListenMonitor extends Thread {
         String requestMessageLine;
         ClientConnectionInfo res = new ClientConnectionInfo(connectionSocket, outToClient);
         fileName = tokenizedLine.nextToken();
+        System.out.println(ConsoleColors.BLUE+"HTTP PUT "+fileName+ConsoleColors.RESET);
 
         if (fileName.startsWith("/")) {
             fileName = fileName.substring(1);
@@ -143,10 +129,12 @@ public class ListenMonitor extends Thread {
             fileName = fileName.substring(1);
         }
 
+        System.out.println(ConsoleColors.BLUE+"HTTP GET "+fileName+ConsoleColors.RESET);
+
 
         if (mServer.getMemory().containsKey(fileName)) {
             VirtualFile requestedFile = mServer.getMemory().get(fileName);
-            System.out.println("File Exists");
+            System.out.println(ConsoleColors.GREEN+"File Exists"+ConsoleColors.RESET);
             outToClient.writeBytes("HTTP/1.1 200 Document Follows\r\n");
             if (fileName.endsWith(".jpg"))
                 outToClient.writeBytes("Content-Type: image/jpeg\r\n");
@@ -159,15 +147,13 @@ public class ListenMonitor extends Thread {
             outToClient.write(requestedFile.getContent().getBytes(), 0, requestedFile.getContent().length());
             connectionSocket.close();
         } else {
-
-            System.out.println("File NOT Exists");
+            System.out.println(ConsoleColors.RED+"File NOT Found"+ConsoleColors.RESET);
 
             if(pendingClientGetReq.containsKey(fileName)){ // another client has already requested this file
                 // so just make this client to wait for the answer
                 pendingClientGetReq.get(fileName).add(res);
                 // don't make another request
             }else {
-                mServer.showGroupMembers();
                 if (mServer.getNextServer().equals(mServer.getThisServer())) {//Means that server has no siblings
                     outToClient.writeBytes("HTTP/1.1 404 File Not Found\r\n");
                     connectionSocket.close();
@@ -198,7 +184,6 @@ public class ListenMonitor extends Thread {
                 BufferedReader inFromMember = new BufferedReader(new InputStreamReader(connectionSocket.getInputStream()));
                 DataOutputStream outToMember = new DataOutputStream(connectionSocket.getOutputStream());
                 requestMessageLine = inFromMember.readLine();
-//                System.out.println(requestMessageLine);
                 if (requestMessageLine != null && requestMessageLine.startsWith("ELEF")) {
                     requestMessageLine = inFromMember.readLine();
                     System.out.println(ConsoleColors.BLUE + requestMessageLine + ConsoleColors.RESET);
@@ -207,15 +192,15 @@ public class ListenMonitor extends Thread {
                         outToMember.writeBytes(String.valueOf(diff) + '\n');
                         if (diff == 1) {
                             //server doens't have right sibling
-                            sendMemberList(outToMember);
-                            GroupMember gm = getNewMember(inFromMember.readLine()); // name of other member
+                            outToMember.writeBytes(mServer.groupMembersToString() + '\n');
+                            GroupMember gm = GroupMember.parseGroupMember(inFromMember.readLine()); // name of other member
                             mServer.getGroupMembers().add(gm);
                             mServer.showGroupMembers();
                         } else {
                             //server HAS right sibling
                             int indexToAdd = mServer.getIndexAsMember();
-                            sendMemberList(outToMember);
-                            GroupMember gm = getNewMember(inFromMember.readLine()); // name of other member
+                            outToMember.writeBytes(mServer.groupMembersToString() + '\n');
+                            GroupMember gm = GroupMember.parseGroupMember(inFromMember.readLine()); // name of other member
                             mServer.getGroupMembers().add(indexToAdd + 1, gm);
                             mServer.showGroupMembers();
                         }
@@ -224,7 +209,7 @@ public class ListenMonitor extends Thread {
                         String memberLists = inFromMember.readLine();
                         if (memberLists.contains(mServer.getName())) {
                             System.out.println(ConsoleColors.GREEN+ "-- STATUS Response" + ConsoleColors.RESET);
-                            ArrayList<GroupMember> gms = parseMembers(memberLists);
+                            ArrayList<GroupMember> gms = GroupMember.parseGroupMembers(memberLists);
                             mServer.setGroupMembers(gms);
                             mServer.showGroupMembers();
                         } else {
@@ -274,15 +259,13 @@ public class ListenMonitor extends Thread {
 
                         connectionSocket.close();
                     } else if (requestMessageLine != null && requestMessageLine.startsWith("FILE GET")) {
-                        if (requestMessageLine.contains(mServer.getName())) {// means that a circle has been completed
-                            System.out.println("FILE GET Cirle Complete");
-                        }
                         String filenameLine = inFromMember.readLine();
                         String[] fileSplit = filenameLine.split("[:]");
                         String filename = fileSplit[1];
                         if (mServer.getMemory().containsKey(filename)) {
                             System.out.println(mServer.getName() + " has the file");
                             String buffer = "";
+
                             // update other servers
                             String senderLine = inFromMember.readLine();
                             String contentLine = "CONTENT:" + mServer.getMemory().get(filename).getContent() + "\n";
@@ -293,10 +276,10 @@ public class ListenMonitor extends Thread {
 
                             if(senderLine.contains(mServer.getName())){
 
-                                System.out.println("FILE GET Cirlce Complete");
-                                System.out.println("Answering to client");
+                                System.out.println(ConsoleColors.BLUE+"FILE GET Cirlce Complete"+ConsoleColors.RESET);
+                                System.out.println(ConsoleColors.GREEN+"Answering to client"+ConsoleColors.RESET);
 
-                                answerToClient(filename);
+                                answerGETToClient(filename);
                             }else{
                                 MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(filename, ""), buffer);
                                 mm.start();
@@ -313,10 +296,10 @@ public class ListenMonitor extends Thread {
 
                                 if (line.contains(mServer.getName())) { // circle has been completed
                                     System.out.println(ConsoleColors.BLUE+"FILE GET Cirlce Complete"+ConsoleColors.RESET);
+                                    System.out.println(ConsoleColors.GREEN+"Answering to client"+ConsoleColors.RESET);
                                     //close connection
-                                    System.out.println(ConsoleColors.BLUE+"Answering to client"+ConsoleColors.RESET);
 
-                                    answerToClient(filename);
+                                    answerGETToClient(filename);
                                 } else {// forward message
                                     MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, new VirtualFile(filename, ""), line);
                                     mm.start();
@@ -324,12 +307,9 @@ public class ListenMonitor extends Thread {
 
                             } else { // there is valuable info about the file and server should save it
                                 //then line should contain CONTENT
-                                System.out.println(mServer.getName() + " saving the file");
                                 buffer = buffer.concat(line+"\n");
-                                System.out.println("content -> " + line);
                                 String[] contentSplit = line.split("[:]");
                                 line = inFromMember.readLine(); // TIMESTAMP
-                                System.out.println("timestamp -> " + line);
                                 buffer = buffer.concat(line+"\n");
                                 String[] timestampSplit = line.split("[:]");
 
@@ -338,7 +318,6 @@ public class ListenMonitor extends Thread {
 
                                 String content = contentSplit[1];
                                 String timestamp = timestampSplit[1];
-                                System.out.println("t:" + timestamp);
 
                                 long tm = Long.parseLong(timestamp);
                                 Instant i = Instant.ofEpochMilli(tm);
@@ -346,12 +325,12 @@ public class ListenMonitor extends Thread {
                                 mServer.storeFile(vf);
 
                                 if(senderLine.contains(mServer.getName())){
-                                    System.out.println("FILE GET Circle Complete");
-                                    System.out.println("Answering to client");
+                                    System.out.println(ConsoleColors.BLUE+"FILE GET Circle Complete"+ConsoleColors.RESET);
+                                    System.out.println(ConsoleColors.GREEN+"Answering to client"+ConsoleColors.RESET);
 
-                                    answerToClient(filename);
+                                    answerGETToClient(filename);
                                 }else{
-                                    System.out.println("Forwarding this msg: "+buffer+"\n");
+                                    System.out.println(ConsoleColors.GREEN+"Forwarding this msg: \n"+buffer+ConsoleColors.RESET);
                                     MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.GET, mServer, vf, buffer);
                                     mm.start();
                                 }

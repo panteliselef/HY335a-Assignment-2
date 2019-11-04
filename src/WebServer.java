@@ -1,4 +1,7 @@
-import java.io.IOException;
+/*
+ * Pantelis Eleftheriadis
+ * csd3942
+ */
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -14,6 +17,18 @@ public class WebServer {
         this.name = name;
         this.ip = ip;
         this.port = port;
+    }
+
+    public String groupMembersToString(){
+        String msg = "";
+        for (int i = 0; i < getGroupMembers().size(); i++) {
+            if (i != getGroupMembers().size()) {
+                msg = msg.concat(getGroupMembers().get(i).getName() + "," + getGroupMembers().get(i).getPort() + "," + getGroupMembers().get(i).getIpAddress() + "$");
+            } else {
+                msg = msg.concat(getGroupMembers().get(i).getName() + "," + getGroupMembers().get(i).getPort() + "," + getGroupMembers().get(i).getIpAddress());
+            }
+        }
+        return msg;
     }
 
 

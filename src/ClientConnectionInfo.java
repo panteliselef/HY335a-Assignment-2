@@ -1,3 +1,7 @@
+/*
+ * Pantelis Eleftheriadis
+ * csd3942
+ */
 import java.io.DataOutputStream;
 import java.net.Socket;
 

@@ -1,3 +1,7 @@
+/*
+ * Pantelis Eleftheriadis
+ * csd3942
+ */
 public class ConsoleColors {
 
     // Reset

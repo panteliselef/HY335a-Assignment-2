@@ -1,3 +1,7 @@
+/*
+ * Pantelis Eleftheriadis
+ * csd3942
+ */
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -21,8 +25,6 @@ public class MemoryMonitor extends Thread {
         this.mServer = mServer;
         this.vf = vf;
         this.type = type;
-
-//        System.out.println("Memory Thread: " + threadName);
     }
 
     MemoryMonitor(String threadName, ReqType type, WebServer mServer, VirtualFile vf, String customMsg) {
@@ -32,8 +34,6 @@ public class MemoryMonitor extends Thread {
         this.vf = vf;
         this.type = type;
         this.customMsg = customMsg;
-
-//        System.out.println("Memory Thread: " + threadName);
     }
 
     private void writeFilePutMessage(DataOutputStream dops) throws IOException {
@@ -60,9 +60,7 @@ public class MemoryMonitor extends Thread {
         dops.writeBytes("REQNAME:" + vf.getName() + '\n');
         dops.writeBytes(msg);
     }
-
     public void sendFileRequest(String senderLine, GroupMember gm) throws IOException {
-//        if(gm.equals(mServer.getNextServer()))return;
         //connect to server's right sibling
         Socket serverSocket = null;
         try {
@@ -95,7 +93,6 @@ public class MemoryMonitor extends Thread {
 
     @Override
     public void run() {
-//        System.out.println("Running "+ threadName);
         try {
             GroupMember gm = mServer.getNextServer();
             sendFileRequest("SENDER:" + mServer.getName(), gm);
