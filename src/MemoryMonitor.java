@@ -42,7 +42,7 @@ public class MemoryMonitor extends Thread {
         dops.writeBytes("FILE PUT received from " + mServer.getName() + "\n");
         dops.writeBytes("FILENAME:" + vf.getName() + '\n');
         dops.writeBytes("CONTENT:" + vf.getContent() + '\n');
-        dops.writeBytes("TIMESTAMP:" + vf.getTimestamp().toEpochMilli() + '\n');
+        dops.writeBytes("TIMESTAMP:" + vf.getTimestamp() + '\n');
     }
 
     private void writeFileGetMessage(DataOutputStream dops) throws IOException {

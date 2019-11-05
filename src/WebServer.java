@@ -97,7 +97,9 @@ public class WebServer {
     public void storeFile(VirtualFile vf){
         if(memory.containsKey(vf.getName())){
             //need to update the content
-            memory.replace(vf.getName(),vf);
+//            memory.replace(vf.getName(),vf);
+            memory.remove(vf.getName());
+            memory.put(vf.getName(),vf);
             System.out.println(ConsoleColors.GREEN +vf.getName()+" has been updated in "+name+ConsoleColors.RESET);
         }else{
             memory.put(vf.getName(),vf);
@@ -115,7 +117,10 @@ public class WebServer {
     }
     public void showMemomry(){
         System.out.println("Printing Memory of "+name);
-        memory.forEach((key,value) -> System.out.println("Name: "+key+" | Content: "+value.getContent()+" | Created: "+value.getTimestamp().toEpochMilli()));
+        for (String key :memory.keySet()){
+            VirtualFile value = memory.get(key);
+            System.out.println("Name: "+key+" | Content: "+value.getContent()+" | Created: "+value.getTimestamp());
+        }
     }
 
     public int getPort() {

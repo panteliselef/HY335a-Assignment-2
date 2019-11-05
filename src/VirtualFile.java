@@ -2,18 +2,18 @@
  * Pantelis Eleftheriadis
  * csd3942
  */
-import java.time.Instant;
+import java.util.Date;
 
 public class VirtualFile {
     private String name;
-    private Instant timestamp;
     private String content;
+    private long timestamp;
     VirtualFile(String name,String content){
         this.name = name;
         this.content = content;
-        this.timestamp = Instant.now();
+        this.timestamp = new Date().getTime();
     }
-    VirtualFile(String name,String content,Instant timestamp){
+    VirtualFile(String name,String content,long timestamp){
         this.name = name;
         this.content = content;
         this.timestamp = timestamp;
@@ -23,7 +23,7 @@ public class VirtualFile {
         return name;
     }
 
-    public Instant getTimestamp() {
+    public long getTimestamp() {
         return timestamp;
     }
 

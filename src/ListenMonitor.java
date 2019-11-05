@@ -6,7 +6,6 @@ import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.StringTokenizer;
@@ -109,7 +108,7 @@ public class ListenMonitor extends Thread {
 //            pendingClientPutReq.remove(vf.getTimestamp().toEpochMilli());
             connectionSocket.close();
         }else{
-            pendingClientPutReq.put(vf.getTimestamp().toEpochMilli(), res);
+            pendingClientPutReq.put(vf.getTimestamp(), res);
             MemoryMonitor mm = new MemoryMonitor(mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
             mm.start();
         }
@@ -231,8 +230,8 @@ public class ListenMonitor extends Thread {
                         String timestamp = timestampSplit[1];
 
                         Long tm = Long.parseLong(timestamp);
-                        Instant i = Instant.ofEpochMilli(tm);
-                        VirtualFile vf = new VirtualFile(filename, content, i);
+//                        Instant i = Instant.ofEpochMilli(tm);
+                        VirtualFile vf = new VirtualFile(filename, content, tm);
                         mServer.storeFile(vf);
 
                         if (senderLine.contains(mServer.getName())) {
@@ -250,7 +249,7 @@ public class ListenMonitor extends Thread {
 
                             out.writeBytes("Content-Location: /" + filename + "\r\n");
                             toBeClosed.close();
-                            pendingClientPutReq.remove(vf.getTimestamp().toEpochMilli());
+                            pendingClientPutReq.remove(vf.getTimestamp());
                         } else {
                             MemoryMonitor mm = new MemoryMonitor("Listening" + mServer.getName(), MemoryMonitor.ReqType.PUT, mServer, vf);
                             mm.sendFileRequest(senderLine, mServer.getNextServer());
@@ -268,8 +267,12 @@ public class ListenMonitor extends Thread {
 
                             // update other servers
                             String senderLine = inFromMember.readLine();
+                            if(!senderLine.contains("SENDER")){ //maybe someone else had the file
+                                senderLine = inFromMember.readLine();
+                                senderLine = inFromMember.readLine();
+                            }
                             String contentLine = "CONTENT:" + mServer.getMemory().get(filename).getContent() + "\n";
-                            String timestampLine = "TIMESTAMP:" + mServer.getMemory().get(filename).getTimestamp().toEpochMilli() + "\n";
+                            String timestampLine = "TIMESTAMP:" + mServer.getMemory().get(filename).getTimestamp() + "\n";
                             buffer = buffer.concat(contentLine);
                             buffer = buffer.concat(timestampLine);
                             buffer = buffer.concat(senderLine);
@@ -320,8 +323,8 @@ public class ListenMonitor extends Thread {
                                 String timestamp = timestampSplit[1];
 
                                 long tm = Long.parseLong(timestamp);
-                                Instant i = Instant.ofEpochMilli(tm);
-                                vf = new VirtualFile(filename, content, i);
+//                                Instant i = Instant.ofEpochMilli(tm);
+                                vf = new VirtualFile(filename, content, tm);
                                 mServer.storeFile(vf);
 
                                 if(senderLine.contains(mServer.getName())){
